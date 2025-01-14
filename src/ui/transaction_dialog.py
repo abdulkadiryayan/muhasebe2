@@ -1,15 +1,43 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QComboBox,
-                              QLineEdit, QDateEdit, QPushButton, QDialogButtonBox)
+                              QLineEdit, QDateEdit, QPushButton, QDialogButtonBox, QMessageBox)
 from PySide6.QtCore import Qt, QDate
 
 class TransactionDialog(QDialog):
-    def __init__(self, database):
+    def __init__(self, database, transaction_id=None):
         super().__init__()
         self.database = database
+        self.transaction_id = transaction_id
+        self.transaction = None
+        if transaction_id:
+            self.transaction = database.get_transaction(transaction_id)
         self.setup_ui()
 
+    def load_transaction_data(self):
+        if not self.transaction:
+            return
+
+        # Başlık ve kasa sahibini seç
+        title_index = self.title_combo.findData(self.transaction['title_id'])
+        self.title_combo.setCurrentIndex(title_index)
+
+        cash_owner_index = self.cash_owner_combo.findData(self.transaction['cash_owner_id'])
+        self.cash_owner_combo.setCurrentIndex(cash_owner_index)
+
+        # Diğer alanları doldur
+        self.date_edit.setDate(QDate.fromString(self.transaction['date'], Qt.ISODate))
+        self.company_edit.setText(self.transaction['company_name'] or '')
+        self.description_edit.setText(self.transaction['description'] or '')
+        self.expense_edit.setText(str(self.transaction['expense'] or ''))
+        self.payment_received_edit.setText(str(self.transaction['payment_received'] or ''))
+        self.check_received_edit.setText(str(self.transaction['check_received'] or ''))
+        self.check_given_edit.setText(str(self.transaction['check_given'] or ''))
+        self.apartment_sale_edit.setText(str(self.transaction['apartment_sale'] or ''))
+        self.invoice_amount_edit.setText(str(self.transaction['invoice_amount'] or ''))
+        self.quantity_edit.setText(str(self.transaction['quantity'] or ''))
+        self.unit_price_edit.setText(str(self.transaction['unit_price'] or ''))
+
     def setup_ui(self):
-        self.setWindowTitle("Yeni İşlem")
+        self.setWindowTitle("Yeni İşlem" if not self.transaction else "İşlem Düzenle")
         layout = QVBoxLayout(self)
         form = QFormLayout()
 
@@ -35,7 +63,7 @@ class TransactionDialog(QDialog):
         form.addRow("Açıklama:", self.description_edit)
 
         self.expense_edit = QLineEdit()
-        form.addRow("Harcama:", self.expense_edit)
+        form.addRow("Yapılan Ödeme:", self.expense_edit)
 
         self.payment_received_edit = QLineEdit()
         form.addRow("Alınan Ödeme:", self.payment_received_edit)
@@ -46,6 +74,18 @@ class TransactionDialog(QDialog):
         self.check_given_edit = QLineEdit()
         form.addRow("Verilen Çek:", self.check_given_edit)
 
+        self.apartment_sale_edit = QLineEdit()
+        form.addRow("Daire Satış:", self.apartment_sale_edit)
+
+        self.invoice_amount_edit = QLineEdit()
+        form.addRow("Fatura Tutarı:", self.invoice_amount_edit)
+
+        self.quantity_edit = QLineEdit()
+        form.addRow("Miktar:", self.quantity_edit)
+
+        self.unit_price_edit = QLineEdit()
+        form.addRow("Birim Fiyatı:", self.unit_price_edit)
+
         layout.addLayout(form)
 
         # Butonlar
@@ -55,6 +95,10 @@ class TransactionDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+        # UI kurulumu tamamlandıktan sonra verileri yükle
+        if self.transaction:
+            self.load_transaction_data()
 
     def refresh_titles(self):
         self.title_combo.clear()
@@ -69,22 +113,66 @@ class TransactionDialog(QDialog):
             self.cash_owner_combo.addItem(owner['name'], owner['id'])
 
     def accept(self):
-        data = {
-            'title_id': self.title_combo.currentData(),
-            'cash_owner_id': self.cash_owner_combo.currentData(),
-            'date': self.date_edit.date().toString(Qt.ISODate),
-            'company_name': self.company_edit.text(),
-            'construction_group_id': None,  # Bu alanı daha sonra ekleyeceğiz
-            'description': self.description_edit.text(),
-            'expense': float(self.expense_edit.text() or 0),
-            'payment_received': float(self.payment_received_edit.text() or 0),
-            'check_received': float(self.check_received_edit.text() or 0),
-            'check_given': float(self.check_given_edit.text() or 0),
-            'apartment_sale': 0,  # Bu alanı daha sonra ekleyeceğiz
-            'invoice_amount': 0,  # Bu alanı daha sonra ekleyeceğiz
-            'quantity': 0,  # Bu alanı daha sonra ekleyeceğiz
-            'unit_price': 0  # Bu alanı daha sonra ekleyeceğiz
-        }
-        
-        self.database.add_transaction(data)
-        super().accept() 
+        try:
+            data = {
+                'title_id': self.title_combo.currentData(),
+                'cash_owner_id': self.cash_owner_combo.currentData(),
+                'date': self.date_edit.date().toString(Qt.ISODate),
+                'company_name': self.company_edit.text(),
+                'construction_group_id': None,
+                'description': self.description_edit.text()
+            }
+            
+            # Sayısal değerlerin kontrolü
+            numeric_fields = {
+                'Yapılan Ödeme': self.expense_edit.text(),
+                'Alınan Ödeme': self.payment_received_edit.text(),
+                'Alınan Çek': self.check_received_edit.text(),
+                'Verilen Çek': self.check_given_edit.text(),
+                'Daire Satış': self.apartment_sale_edit.text(),
+                'Fatura Tutarı': self.invoice_amount_edit.text(),
+                'Miktar': self.quantity_edit.text(),
+                'Birim Fiyatı': self.unit_price_edit.text()
+            }
+            
+            # Sayısal alanları kontrol et ve dönüştür
+            for field_name, value in numeric_fields.items():
+                try:
+                    if value.strip() == '':
+                        numeric_fields[field_name] = 0
+                    else:
+                        numeric_fields[field_name] = float(value)
+                except ValueError:
+                    QMessageBox.warning(
+                        self,
+                        "Hatalı Değer",
+                        f"{field_name} alanına geçerli bir sayısal değer giriniz.\n"
+                        f"Girilen değer: {value}"
+                    )
+                    return
+            
+            # Doğrulanmış sayısal değerleri data sözlüğüne ekle
+            data.update({
+                'expense': numeric_fields['Yapılan Ödeme'],
+                'payment_received': numeric_fields['Alınan Ödeme'],
+                'check_received': numeric_fields['Alınan Çek'],
+                'check_given': numeric_fields['Verilen Çek'],
+                'apartment_sale': numeric_fields['Daire Satış'],
+                'invoice_amount': numeric_fields['Fatura Tutarı'],
+                'quantity': numeric_fields['Miktar'],
+                'unit_price': numeric_fields['Birim Fiyatı']
+            })
+            
+            if self.transaction_id:
+                self.database.update_transaction(self.transaction_id, data)
+            else:
+                self.database.add_transaction(data)
+            
+            super().accept()
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Hata",
+                f"İşlem kaydedilirken bir hata oluştu:\n{str(e)}"
+            ) 
