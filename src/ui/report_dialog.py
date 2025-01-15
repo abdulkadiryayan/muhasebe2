@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QComboBox,
                               QPushButton, QMessageBox)
 from pathlib import Path
 import openpyxl
-from openpyxl.styles import Font
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from datetime import datetime
 
 class ReportDialog(QDialog):
@@ -66,46 +66,102 @@ class ReportDialog(QDialog):
         ws = wb.active
         ws.title = "Muhasebe Raporu"
 
+        # Stil tanımlamaları
+        header_font = Font(name='Arial', size=12, bold=True, color='FFFFFF')
+        header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        
+        # Kenarlık stilleri
+        thin_border = Side(border_style="thin", color="000000")
+        border = Border(left=thin_border, right=thin_border, top=thin_border, bottom=thin_border)
+        
+        # Hücre stilleri
+        number_format = '#,##0.00'
+        cell_alignment = Alignment(horizontal='left', vertical='center')
+        number_alignment = Alignment(horizontal='right', vertical='center')
+        
         # Başlıkları ekle
         headers = ["Tarih", "Başlık", "Kasa Sahibi", "Firma", "Açıklama",
                   "Yapılan Ödeme", "Alınan Ödeme", "Alınan Çek", "Verilen Çek",
                   "Daire Satış", "Fatura Tutarı", "Miktar", "Birim Fiyat",
                   "Toplam Tutar"]
 
+        # Sütun genişlikleri
+        column_widths = {
+            'A': 15,  # Tarih
+            'B': 25,  # Başlık
+            'C': 25,  # Kasa Sahibi
+            'D': 25,  # Firma
+            'E': 40,  # Açıklama
+            'F': 15,  # Yapılan Ödeme
+            'G': 15,  # Alınan Ödeme
+            'H': 15,  # Alınan Çek
+            'I': 15,  # Verilen Çek
+            'J': 15,  # Daire Satış
+            'K': 15,  # Fatura Tutarı
+            'L': 12,  # Miktar
+            'M': 15,  # Birim Fiyat
+            'N': 15,  # Toplam Tutar
+        }
+
+        # Sütun genişliklerini ayarla
+        for col, width in column_widths.items():
+            ws.column_dimensions[col].width = width
+
+        # Başlıkları formatla
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col)
             cell.value = header
-            cell.font = Font(bold=True)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = border
 
-        # Verileri ekle
+        # Satır yüksekliği
+        ws.row_dimensions[1].height = 30
+
+        # Verileri ekle ve formatla
         for row, trans in enumerate(transactions, 2):
-            ws.cell(row=row, column=1).value = trans['date']
-            ws.cell(row=row, column=2).value = trans['title_name']
-            ws.cell(row=row, column=3).value = trans['cash_owner_name']
-            ws.cell(row=row, column=4).value = trans['company_name']
-            ws.cell(row=row, column=5).value = trans['description']
-            ws.cell(row=row, column=6).value = trans['expense']
-            ws.cell(row=row, column=7).value = trans['payment_received']
-            ws.cell(row=row, column=8).value = trans['check_received']
-            ws.cell(row=row, column=9).value = trans['check_given']
-            ws.cell(row=row, column=10).value = trans['apartment_sale']
-            ws.cell(row=row, column=11).value = trans['invoice_amount']
-            ws.cell(row=row, column=12).value = trans['quantity']
-            ws.cell(row=row, column=13).value = trans['unit_price']
-            ws.cell(row=row, column=14).value = f"=L{row}*M{row}"  # Toplam Tutar formülü
+            # Tarih ve metin verileri
+            ws.cell(row=row, column=1, value=trans['date']).alignment = cell_alignment
+            ws.cell(row=row, column=2, value=trans['title_name']).alignment = cell_alignment
+            ws.cell(row=row, column=3, value=trans['cash_owner_name']).alignment = cell_alignment
+            ws.cell(row=row, column=4, value=trans['company_name']).alignment = cell_alignment
+            ws.cell(row=row, column=5, value=trans['description']).alignment = cell_alignment
 
-        # Sütun genişliklerini ayarla
-        for column in ws.columns:
-            max_length = 0
-            column = [cell for cell in column]
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = (max_length + 2)
-            ws.column_dimensions[column[0].column_letter].width = adjusted_width
+            # Sayısal veriler
+            numeric_cells = [
+                (6, trans['expense']),
+                (7, trans['payment_received']),
+                (8, trans['check_received']),
+                (9, trans['check_given']),
+                (10, trans['apartment_sale']),
+                (11, trans['invoice_amount']),
+                (12, trans['quantity']),
+                (13, trans['unit_price'])
+            ]
+
+            for col, value in numeric_cells:
+                cell = ws.cell(row=row, column=col, value=value or 0)
+                cell.number_format = number_format
+                cell.alignment = number_alignment
+
+            # Toplam Tutar hesaplama ve formatlama
+            total_cell = ws.cell(row=row, column=14)
+            total_cell.value = f"=L{row}*M{row}"
+            total_cell.number_format = number_format
+            total_cell.alignment = number_alignment
+
+            # Tüm hücrelere kenarlık ekle
+            for col in range(1, 15):
+                ws.cell(row=row, column=col).border = border
+
+        # Alternatif satır renklendirmesi
+        for row in range(2, len(transactions) + 2):
+            if row % 2 == 0:
+                for col in range(1, 15):
+                    cell = ws.cell(row=row, column=col)
+                    cell.fill = PatternFill(start_color='F2F2F2', end_color='F2F2F2', fill_type='solid')
 
         # Masaüstüne kaydet
         desktop_path = str(Path.home() / "Desktop")

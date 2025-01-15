@@ -27,6 +27,12 @@ class TransactionDialog(QDialog):
         self.date_edit.setDate(QDate.fromString(self.transaction['date'], Qt.ISODate))
         self.company_edit.setText(self.transaction['company_name'] or '')
         self.description_edit.setText(self.transaction['description'] or '')
+        
+        # İnşaat grubu adını yükle - get yerine doğrudan erişim kullan
+        construction_group_name = self.transaction['construction_group_name'] if 'construction_group_name' in self.transaction.keys() else ''
+        self.construction_group_edit.setText(construction_group_name)
+        
+        # Sayısal alanları doldur
         self.expense_edit.setText(str(self.transaction['expense'] or ''))
         self.payment_received_edit.setText(str(self.transaction['payment_received'] or ''))
         self.check_received_edit.setText(str(self.transaction['check_received'] or ''))
@@ -58,6 +64,10 @@ class TransactionDialog(QDialog):
 
         self.company_edit = QLineEdit()
         form.addRow("Firma:", self.company_edit)
+
+        # İnşaat grubu metin alanı - Firmanın altına taşındı
+        self.construction_group_edit = QLineEdit()
+        form.addRow("İnşaat Grubu:", self.construction_group_edit)
 
         self.description_edit = QLineEdit()
         form.addRow("Açıklama:", self.description_edit)
@@ -117,9 +127,9 @@ class TransactionDialog(QDialog):
             data = {
                 'title_id': self.title_combo.currentData(),
                 'cash_owner_id': self.cash_owner_combo.currentData(),
+                'construction_group': self.construction_group_edit.text(),  # İnşaat grubu adı
                 'date': self.date_edit.date().toString(Qt.ISODate),
                 'company_name': self.company_edit.text(),
-                'construction_group_id': None,
                 'description': self.description_edit.text()
             }
             

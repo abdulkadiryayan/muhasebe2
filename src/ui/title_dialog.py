@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout,
-                              QLineEdit, QDialogButtonBox)
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLineEdit, 
+                              QPushButton, QDialogButtonBox, QMessageBox)
 
 class TitleDialog(QDialog):
     def __init__(self, database):
@@ -8,15 +8,15 @@ class TitleDialog(QDialog):
         self.setup_ui()
 
     def setup_ui(self):
-        self.setWindowTitle("Yeni Başlık/Kasa Sahibi")
+        self.setWindowTitle("Yeni Başlık")
         layout = QVBoxLayout(self)
         form = QFormLayout()
 
         self.title_edit = QLineEdit()
-        form.addRow("Başlık Adı:", self.title_edit)
+        form.addRow("Başlık:", self.title_edit)
 
         self.cash_owner_edit = QLineEdit()
-        form.addRow("Kasa Sahibi Adı:", self.cash_owner_edit)
+        form.addRow("Kasa Sahibi:", self.cash_owner_edit)
 
         layout.addLayout(form)
 
@@ -28,12 +28,18 @@ class TitleDialog(QDialog):
         layout.addWidget(buttons)
 
     def accept(self):
-        title_name = self.title_edit.text()
-        cash_owner_name = self.cash_owner_edit.text()
+        title = self.title_edit.text().strip()
+        cash_owner = self.cash_owner_edit.text().strip()
 
-        if title_name:
-            self.database.add_title(title_name)
-        if cash_owner_name:
-            self.database.add_cash_owner(cash_owner_name)
+        if not title and not cash_owner:
+            QMessageBox.warning(self, "Uyarı", "Lütfen en az bir alan doldurun!")
+            return
 
-        super().accept() 
+        try:
+            if title:
+                self.database.add_title(title)
+            if cash_owner:
+                self.database.add_cash_owner(cash_owner)
+            super().accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", str(e)) 
